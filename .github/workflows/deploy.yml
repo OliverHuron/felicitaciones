@@ -1,0 +1,71 @@
+name: Deploy felicitaciones
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-felicitaciones
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Mismo runner self-hosted que el resto de proyectos SIAF (label "siaf").
+    runs-on: [self-hosted, siaf]
+
+    env:
+      APP_DIR: /var/www/siaf-felicitaciones
+      ENV_FILE: /var/www/.env.siaf-felicitaciones
+      PM2_NAME: siaf-felicitaciones
+      APP_PORT: 5007
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Sincronizar código a APP_DIR
+        run: |
+          mkdir -p "$APP_DIR"
+          rsync -a --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude 'server/storage' \
+            --exclude 'server/.env' \
+            --exclude 'server/seed/profesores.csv' \
+            --exclude 'client/dist' \
+            ./ "$APP_DIR/"
+
+      - name: Restaurar .env de producción
+        run: |
+          test -f "$ENV_FILE" || { echo "ERROR: falta $ENV_FILE en el servidor"; exit 1; }
+          cp "$ENV_FILE" "$APP_DIR/server/.env"
+
+      - name: Backend — dependencias
+        working-directory: ${{ env.APP_DIR }}/server
+        run: npm ci --omit=dev
+
+      - name: Backend — migraciones
+        working-directory: ${{ env.APP_DIR }}/server
+        run: npm run migrate
+
+      - name: Frontend — build
+        working-directory: ${{ env.APP_DIR }}/client
+        run: |
+          npm ci
+          npm run build
+
+      - name: Reiniciar con PM2
+        working-directory: ${{ env.APP_DIR }}/server
+        run: |
+          if pm2 describe "$PM2_NAME" > /dev/null 2>&1; then
+            pm2 restart "$PM2_NAME" --update-env
+          else
+            pm2 start src/index.js --name "$PM2_NAME"
+          fi
+          pm2 save
+
+      - name: Health check
+        run: |
+          sleep 3
+          curl -fsS "http://localhost:${APP_PORT}/api/health" | tee /dev/stderr | grep -q '"status":"OK"'

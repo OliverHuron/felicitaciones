@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+npm-debug.log*
+
+# Estado de sesión de WhatsApp (Baileys) y plantillas subidas — datos en runtime
+server/storage/*
+!server/storage/.gitkeep
+
+# Semilla real de profesores (usa seed/profesores.example.csv como plantilla)
+server/seed/profesores.csv
+
+.DS_Store
+Thumbs.db
