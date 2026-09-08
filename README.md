@@ -35,7 +35,7 @@ server/                  API Express
     services/            whatsapp (Baileys), mailer (Nodemailer), plantillas (textos),
                          imagen (tarjeta), excel (importar/plantilla)
     jobs/                cumpleanos (lógica) + scheduler (cron)
-  migrations/            001_initial.sql · 002_plantillas.sql
+  migrations/            001_initial.sql · 002_plantillas.sql · 003_ajustes.sql
   seed/profesores.example.csv
   assets/                feliz-cumpleanos.jpg (plantilla incluida) + fonts/ (se versionan)
   storage/               sesión de WhatsApp + plantillas subidas (NO se versiona)
@@ -85,7 +85,10 @@ Entra a http://localhost:5173 con `admin` / el valor de `SEED_PASSWORD` (`123456
 ### Pestaña Envíos
 
 - Estado de WhatsApp (QR para vincular) y de Gmail.
-- **Ejecutar envío de hoy** — corre el job de los cumpleañeros de hoy.
+- **Programación del envío automático** — activar/desactivar y elegir la **hora**
+  del envío diario (o una expresión cron en "modo avanzado", p. ej. `0 8 * * 1-5`
+  para solo días hábiles). Se guarda en la BD y reprograma `node-cron` al instante,
+  sin reiniciar. Botón **Ejecutar ahora** para lanzar el envío manualmente.
 - **Prueba de envío** — manda la tarjeta a un teléfono y/o correo sin registrar nada.
 
 Para probar sin mandar mensajes reales: `DRY_RUN=true` en `server/.env`.
@@ -96,7 +99,7 @@ Ver `server/.env.example`. Las que más se tocan:
 
 | Variable | Para qué |
 |---|---|
-| `CRON_CUMPLEANOS` | Horario del envío (cron 5 campos, en `TZ`). Default `0 8 * * *`. |
+| `CRON_CUMPLEANOS` | Horario **inicial** del envío (cron 5 campos, en `TZ`). Luego se ajusta desde el panel y vive en la BD. Default `0 8 * * *`. |
 | `ENVIAR_WHATSAPP` / `ENVIAR_EMAIL` | Activar cada canal. Email arranca en `false`. |
 | `WHATSAPP_PAIS_DEFAULT` | Prefijo para teléfonos de 10 dígitos (México = `52`). |
 | `DRY_RUN` | `true` = no envía, solo registra en `envios_log`. |
@@ -141,6 +144,7 @@ Todas bajo `/api`, con `Authorization: Bearer <token>` salvo `login` y `health`.
 | `GET` | `/api/whatsapp/status` | Estado de la conexión. |
 | `GET` | `/api/whatsapp/qr` | QR actual (data URL) si toca vincular. |
 | `POST` | `/api/whatsapp/start` | Forzar (re)conexión. |
+| `GET/PUT` | `/api/ajustes/programacion` | Leer / cambiar la programación del cron: `{ hora, minuto, activo }` o `{ cron, activo }`. Reprograma al vuelo. |
 | `GET` | `/api/jobs/cumpleanos/hoy` | Quién cumple años hoy. |
 | `POST` | `/api/jobs/cumpleanos/run` | Ejecuta el envío a los cumpleañeros de hoy (`?forzar=true` reenvía). |
 | `POST` | `/api/jobs/enviar/:id` | Envío manual a un profesor concreto, ahora (WhatsApp y/o Gmail; ignora los interruptores `ENVIAR_*`). Body opcional `{ canales: [...] }`. |

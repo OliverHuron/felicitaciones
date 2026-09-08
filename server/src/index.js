@@ -39,6 +39,7 @@ app.use('/api/fonts', express.static(require('./services/imagen').FONTS_DIR, {
 app.use('/api/auth', require('./auth/routes'));
 app.use('/api/profesores', require('./routes/profesores'));
 app.use('/api/plantillas', require('./routes/plantillas'));
+app.use('/api/ajustes', require('./routes/ajustes'));
 app.use('/api/whatsapp', require('./routes/whatsapp'));
 app.use('/api/jobs', require('./routes/jobs'));
 app.use('/api/tarjeta', require('./routes/tarjeta'));
@@ -65,7 +66,7 @@ app.use((err, _req, res, _next) => {
 
 app.listen(config.port, () => {
   console.log(`[felicitaciones] API en :${config.port} (${config.nodeEnv}, TZ=${config.tz})`);
-  scheduler.iniciar();
+  scheduler.iniciar().catch((e) => console.error('[scheduler] iniciar:', e.message));
   if (config.enviarWhatsapp) {
     whatsapp.start().catch((e) => console.error('[whatsapp] start:', e.message));
   }

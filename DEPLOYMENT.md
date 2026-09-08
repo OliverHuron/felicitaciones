@@ -331,8 +331,10 @@ cat ~/.pm2/dump.pm2 | grep siaf-felicitaciones
   orden en el siguiente deploy y registra cada una en la tabla `_migraciones`.
 - **`.env`**: cambios en producción se hacen en `/var/www/.env.siaf-felicitaciones`
   y se aplican con `pm2 restart siaf-felicitaciones --update-env`.
-- **Horario del envío**: `CRON_CUMPLEANOS` (formato cron de 5 campos, en `TZ`).
-  Por defecto `0 8 * * *` = todos los días a las 08:00.
+- **Horario del envío**: se ajusta desde el panel (pestaña *Envíos* →
+  *Programación del envío automático*) y se guarda en la tabla `ajustes`;
+  `node-cron` se reprograma al instante, sin `pm2 restart`. `CRON_CUMPLEANOS`
+  del `.env` es solo el valor inicial (cron de 5 campos, en `TZ`).
 - **Reenvíos**: el job es idempotente por día gracias al `UNIQUE` de `envios_log`.
   El endpoint `POST /api/jobs/cumpleanos/run?forzar=true` fuerza el reenvío.
 - **`server/storage/`**: no se versiona ni se sincroniza. Respaldo aparte

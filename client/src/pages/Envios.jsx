@@ -11,7 +11,12 @@ export default function Envios() {
   const [previewNombre, setPreviewNombre] = useState('María López García');
   const [tel, setTel] = useState('');
   const [correo, setCorreo] = useState('');
-  const [forzar, setForzar] = useState(false);
+
+  // Programación
+  const [prog, setProg] = useState(null);
+  const [hora, setHora] = useState('08:00');
+  const [avanzado, setAvanzado] = useState(false);
+  const [cronTxt, setCronTxt] = useState('0 8 * * *');
 
   const cargarSalud = useCallback(async () => {
     try {
@@ -31,12 +36,28 @@ export default function Envios() {
     }
   }, []);
 
+  const cargarProg = useCallback(async () => {
+    try {
+      const p = await api('/ajustes/programacion');
+      setProg(p);
+      setCronTxt(p.cron);
+      if (p.hora != null) {
+        setHora(`${String(p.hora).padStart(2, '0')}:${String(p.minuto).padStart(2, '0')}`);
+      } else {
+        setAvanzado(true);
+      }
+    } catch {
+      /* noop */
+    }
+  }, []);
+
   useEffect(() => {
     cargarSalud();
     cargarWa();
+    cargarProg();
     const id = setInterval(cargarWa, 4000);
     return () => clearInterval(id);
-  }, [cargarSalud, cargarWa]);
+  }, [cargarSalud, cargarWa, cargarProg]);
 
   useEffect(() => {
     if (wa.estado === 'qr' && wa.hayQR) {
@@ -46,10 +67,32 @@ export default function Envios() {
     }
   }, [wa.estado, wa.hayQR]);
 
-  async function correrJob() {
-    setMsg('Ejecutando envío de hoy…');
+  async function guardarProgramacion() {
+    setMsg('Guardando programación…');
     try {
-      const r = await api(`/jobs/cumpleanos/run${forzar ? '?forzar=true' : ''}`, { method: 'POST' });
+      const body = avanzado
+        ? { cron: cronTxt.trim(), activo: prog.activo }
+        : (() => {
+            const [h, m] = hora.split(':');
+            return { hora: +h, minuto: +m, activo: prog.activo };
+          })();
+      const p = await api('/ajustes/programacion', { method: 'PUT', body });
+      setProg(p);
+      setCronTxt(p.cron);
+      setMsg(
+        p.activo
+          ? `Guardado. El envío automático correrá ${p.descripcion} (hora de ${p.tz}).`
+          : 'Guardado. El envío automático quedó DESACTIVADO.'
+      );
+    } catch (err) {
+      setMsg('Error: ' + err.message);
+    }
+  }
+
+  async function ejecutarAhora() {
+    setMsg('Ejecutando…');
+    try {
+      const r = await api('/jobs/cumpleanos/run', { method: 'POST' });
       const resumen = (arr) =>
         arr.length
           ? arr.map((x) => (x.detalle ? `${x.estado} (${x.detalle})` : x.estado)).join(', ')
@@ -111,19 +154,45 @@ export default function Envios() {
       </section>
 
       <section className="card">
-        <h2>Envío del día</h2>
+        <h2>Programación del envío automático</h2>
         <p className="sub">
-          Busca quién cumple años hoy y envía la felicitación por los canales activados.
-          Cada persona se felicita una sola vez al día: si ya se le envió, aparece como
-          <em> omitido (ya enviado hoy)</em>.
+          Cada día a la hora indicada, el sistema revisa quién cumple años y envía la
+          felicitación por los canales activados. Hora de <strong>{prog?.tz || 'México'}</strong>.
         </p>
-        <div className="fila-accion">
-          <button onClick={correrJob}>Ejecutar envío de hoy</button>
-          <label className="check">
-            <input type="checkbox" checked={forzar} onChange={(e) => setForzar(e.target.checked)} />
-            Reenviar aunque ya se haya enviado hoy
+
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={prog?.activo ?? true}
+            onChange={(e) => setProg((p) => ({ ...p, activo: e.target.checked }))}
+          />
+          Envío automático activado
+        </label>
+
+        {!avanzado ? (
+          <label>Hora del envío diario
+            <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} style={{ maxWidth: 140 }} />
           </label>
+        ) : (
+          <label>Expresión cron <span className="sub">(min hora día-mes mes día-semana)</span>
+            <input value={cronTxt} onChange={(e) => setCronTxt(e.target.value)} placeholder="0 8 * * *" />
+          </label>
+        )}
+
+        <label className="check">
+          <input type="checkbox" checked={avanzado} onChange={(e) => setAvanzado(e.target.checked)} />
+          Modo avanzado (cron) — p. ej. <code>0 8 * * 1-5</code> = solo días hábiles
+        </label>
+
+        <div className="fila-accion">
+          <button onClick={guardarProgramacion}>Guardar programación</button>
+          <button className="ghost sm" onClick={ejecutarAhora}>Ejecutar ahora</button>
         </div>
+        {prog && (
+          <p className="msg">
+            Ahora mismo: {prog.activo ? prog.descripcion : 'desactivado'} · <code>{prog.cron}</code>
+          </p>
+        )}
       </section>
 
       <section className="card">
