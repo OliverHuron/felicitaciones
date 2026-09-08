@@ -12,8 +12,10 @@ export default function Envios() {
   const [tel, setTel] = useState('');
   const [correo, setCorreo] = useState('');
 
-  // Programación
-  const [prog, setProg] = useState(null);
+  // Programación (nunca null: arranca con valores por defecto)
+  const DEFECTO = { activo: true, cron: '0 8 * * *', tz: 'México', descripcion: 'todos los días a las 08:00', hora: 8, minuto: 0 };
+  const [prog, setProg] = useState(DEFECTO);
+  const [progCargada, setProgCargada] = useState(false);
   const [hora, setHora] = useState('08:00');
   const [avanzado, setAvanzado] = useState(false);
   const [cronTxt, setCronTxt] = useState('0 8 * * *');
@@ -39,15 +41,18 @@ export default function Envios() {
   const cargarProg = useCallback(async () => {
     try {
       const p = await api('/ajustes/programacion');
+      if (!p || typeof p.activo !== 'boolean') throw new Error('respuesta inválida');
       setProg(p);
-      setCronTxt(p.cron);
+      setProgCargada(true);
+      setCronTxt(p.cron || '0 8 * * *');
       if (p.hora != null) {
         setHora(`${String(p.hora).padStart(2, '0')}:${String(p.minuto).padStart(2, '0')}`);
+        setAvanzado(false);
       } else {
         setAvanzado(true);
       }
     } catch {
-      /* noop */
+      setProgCargada(false);
     }
   }, []);
 
@@ -68,16 +73,19 @@ export default function Envios() {
   }, [wa.estado, wa.hayQR]);
 
   async function guardarProgramacion() {
+    const activo = prog?.activo ?? true;
+    let body;
+    if (avanzado) {
+      body = { cron: (cronTxt || '').trim(), activo };
+    } else {
+      const [h, m] = (hora || '08:00').split(':');
+      body = { hora: Number(h) || 0, minuto: Number(m) || 0, activo };
+    }
     setMsg('Guardando programación…');
     try {
-      const body = avanzado
-        ? { cron: cronTxt.trim(), activo: prog.activo }
-        : (() => {
-            const [h, m] = hora.split(':');
-            return { hora: +h, minuto: +m, activo: prog.activo };
-          })();
       const p = await api('/ajustes/programacion', { method: 'PUT', body });
       setProg(p);
+      setProgCargada(true);
       setCronTxt(p.cron);
       setMsg(
         p.activo
@@ -85,7 +93,8 @@ export default function Envios() {
           : 'Guardado. El envío automático quedó DESACTIVADO.'
       );
     } catch (err) {
-      setMsg('Error: ' + err.message);
+      const hint = /404/.test(err.message) ? ' — ¿reiniciaste el servidor tras actualizar el código?' : '';
+      setMsg('Error: ' + err.message + hint);
     }
   }
 
@@ -188,9 +197,14 @@ export default function Envios() {
           <button onClick={guardarProgramacion}>Guardar programación</button>
           <button className="ghost sm" onClick={ejecutarAhora}>Ejecutar ahora</button>
         </div>
-        {prog && (
+        {progCargada ? (
           <p className="msg">
             Ahora mismo: {prog.activo ? prog.descripcion : 'desactivado'} · <code>{prog.cron}</code>
+          </p>
+        ) : (
+          <p className="aviso">
+            No se pudo leer la programación del servidor (mostrando valores por defecto).
+            Si acabas de actualizar, reinicia el servicio.
           </p>
         )}
       </section>
