@@ -11,6 +11,7 @@ export default function Envios() {
   const [previewNombre, setPreviewNombre] = useState('María López García');
   const [tel, setTel] = useState('');
   const [correo, setCorreo] = useState('');
+  const [forzar, setForzar] = useState(false);
 
   const cargarSalud = useCallback(async () => {
     try {
@@ -48,9 +49,15 @@ export default function Envios() {
   async function correrJob() {
     setMsg('Ejecutando envío de hoy…');
     try {
-      const r = await api('/jobs/cumpleanos/run', { method: 'POST' });
-      const resumen = (arr) => (arr.length ? arr.map((x) => x.estado).join(', ') : '—');
-      setMsg(`Hoy (${r.fecha}): ${r.total} cumpleañero(s). WhatsApp: ${resumen(r.whatsapp)}. Email: ${resumen(r.email)}.`);
+      const r = await api(`/jobs/cumpleanos/run${forzar ? '?forzar=true' : ''}`, { method: 'POST' });
+      const resumen = (arr) =>
+        arr.length
+          ? arr.map((x) => (x.detalle ? `${x.estado} (${x.detalle})` : x.estado)).join(', ')
+          : 'sin destinatarios';
+      setMsg(
+        `Hoy (${r.fecha}): ${r.total} cumpleañero(s).\n` +
+        `WhatsApp: ${resumen(r.whatsapp)}\nEmail: ${resumen(r.email)}`
+      );
     } catch (err) {
       setMsg('Error: ' + err.message);
     }
@@ -105,8 +112,18 @@ export default function Envios() {
 
       <section className="card">
         <h2>Envío del día</h2>
-        <p className="sub">Busca quién cumple años hoy y envía la felicitación por los canales activados.</p>
-        <button onClick={correrJob}>Ejecutar envío de hoy</button>
+        <p className="sub">
+          Busca quién cumple años hoy y envía la felicitación por los canales activados.
+          Cada persona se felicita una sola vez al día: si ya se le envió, aparece como
+          <em> omitido (ya enviado hoy)</em>.
+        </p>
+        <div className="fila-accion">
+          <button onClick={correrJob}>Ejecutar envío de hoy</button>
+          <label className="check">
+            <input type="checkbox" checked={forzar} onChange={(e) => setForzar(e.target.checked)} />
+            Reenviar aunque ya se haya enviado hoy
+          </label>
+        </div>
       </section>
 
       <section className="card">
